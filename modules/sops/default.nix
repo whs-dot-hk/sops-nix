@@ -324,7 +324,7 @@ in {
       sops.environment.SOPS_GPG_EXEC = lib.mkIf (cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != []) (lib.mkDefault "${pkgs.gnupg}/bin/gpg");
 
       # When using sysusers we no longer be started as an activation script because those are started in initrd while sysusers is started later.
-      systemd.services.sops-install-secrets = lib.mkIf (regularSecrets != { } && useSystemdActivation) {
+      systemd.services.sops-install-secrets = {
         wantedBy = [  "sysinit.target" ];
         after = [ "systemd-sysusers.service" ];
         environment = cfg.environment;
@@ -337,25 +337,25 @@ in {
         };
       };
 
-      system.activationScripts = {
-        setupSecrets = lib.mkIf (regularSecrets != {} && !useSystemdActivation) (lib.stringAfter ([ "specialfs" "users" "groups" ] ++ lib.optional cfg.age.generateKey "generate-age-key") ''
-          [ -e /run/current-system ] || echo setting up secrets...
-          ${withEnvironment "${sops-install-secrets}/bin/sops-install-secrets ${manifest}"}
-        '' // lib.optionalAttrs (config.system ? dryActivationScript) {
-          supportsDryActivation = true;
-        });
+      #system.activationScripts = {
+      #  setupSecrets = lib.mkIf (regularSecrets != {} && !useSystemdActivation) (lib.stringAfter ([ "specialfs" "users" "groups" ] ++ lib.optional cfg.age.generateKey "generate-age-key") ''
+      #    [ -e /run/current-system ] || echo setting up secrets...
+      #    ${withEnvironment "${sops-install-secrets}/bin/sops-install-secrets ${manifest}"}
+      #  '' // lib.optionalAttrs (config.system ? dryActivationScript) {
+      #    supportsDryActivation = true;
+      #  });
 
-        generate-age-key = let
-          escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
-        in lib.mkIf cfg.age.generateKey (lib.stringAfter [] ''
-          if [[ ! -f ${escapedKeyFile} ]]; then
-            echo generating machine-specific age key...
-            mkdir -p $(dirname ${escapedKeyFile})
-            # age-keygen sets 0600 by default, no need to chmod.
-            ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
-          fi
-        '');
-      };
+      #  generate-age-key = let
+      #    escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
+      #  in lib.mkIf cfg.age.generateKey (lib.stringAfter [] ''
+      #    if [[ ! -f ${escapedKeyFile} ]]; then
+      #      echo generating machine-specific age key...
+      #      mkdir -p $(dirname ${escapedKeyFile})
+      #      # age-keygen sets 0600 by default, no need to chmod.
+      #      ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
+      #    fi
+      #  '');
+      #};
     })
     {
      system.build.sops-nix-manifest = manifest;
