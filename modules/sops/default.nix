@@ -1,6 +1,10 @@
-{ config, options, lib, pkgs, ... }:
-
-let
+{
+  config,
+  options,
+  lib,
+  pkgs,
+  ...
+}: let
   cfg = config.sops;
   users = config.users.users;
   sops-install-secrets = cfg.package;
@@ -20,13 +24,14 @@ let
 
   regularSecrets = lib.filterAttrs (_: v: !v.neededForUsers) cfg.secrets;
 
-  useSystemdActivation = (options.systemd ? sysusers && config.systemd.sysusers.enable) ||
-    (options.services ? userborn && config.services.userborn.enable);
+  useSystemdActivation =
+    (options.systemd ? sysusers && config.systemd.sysusers.enable)
+    || (options.services ? userborn && config.services.userborn.enable);
 
   withEnvironment = import ./with-environment.nix {
     inherit cfg lib;
   };
-  secretType = lib.types.submodule ({ config, ... }: {
+  secretType = lib.types.submodule ({config, ...}: {
     config = {
       sopsFile = lib.mkOptionDefault cfg.defaultSopsFile;
       sopsFileHash = lib.mkOptionDefault (lib.optionalString cfg.validateSopsFiles "${builtins.hashFile "sha256" config.sopsFile}");
@@ -50,7 +55,10 @@ let
       };
       path = lib.mkOption {
         type = lib.types.str;
-        default = if config.neededForUsers then "/run/secrets-for-users/${config.name}" else "/run/secrets/${config.name}";
+        default =
+          if config.neededForUsers
+          then "/run/secrets-for-users/${config.name}"
+          else "/run/secrets/${config.name}";
         defaultText = "/run/secrets-for-users/$name when neededForUsers is set, /run/secrets/$name when otherwise.";
         description = ''
           Path where secrets are symlinked to.
@@ -103,8 +111,8 @@ let
       };
       restartUnits = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [ ];
-        example = [ "sshd.service" ];
+        default = [];
+        example = ["sshd.service"];
         description = ''
           Names of units that should be restarted when this secret changes.
           This works the same way as <xref linkend="opt-systemd.services._name_.restartTriggers" />.
@@ -112,8 +120,8 @@ let
       };
       reloadUnits = lib.mkOption {
         type = lib.types.listOf lib.types.str;
-        default = [ ];
-        example = [ "sshd.service" ];
+        default = [];
+        example = ["sshd.service"];
         description = ''
           Names of units that should be reloaded when this secret changes.
           This works the same way as <xref linkend="opt-systemd.services._name_.reloadTriggers" />.
@@ -133,10 +141,9 @@ let
 
   # Skip ssh keys deployed with sops to avoid a catch 22
   defaultImportKeys = algo:
-    if config.services.openssh.enable then
-      map (e: e.path) (lib.filter (e: e.type == algo && !(lib.hasPrefix "/run/secrets" e.path)) config.services.openssh.hostKeys)
-    else
-      [];
+    if config.services.openssh.enable
+    then map (e: e.path) (lib.filter (e: e.type == algo && !(lib.hasPrefix "/run/secrets" e.path)) config.services.openssh.hostKeys)
+    else [];
 in {
   options.sops = {
     secrets = lib.mkOption {
@@ -180,8 +187,8 @@ in {
     };
 
     log = lib.mkOption {
-      type = lib.types.listOf (lib.types.enum [ "keyImport" "secretChanges" ]);
-      default = [ "keyImport" "secretChanges" ];
+      type = lib.types.listOf (lib.types.enum ["keyImport" "secretChanges"]);
+      default = ["keyImport" "secretChanges"];
       description = "What to log";
     };
 
@@ -213,8 +220,8 @@ in {
       type = lib.types.package;
       default =
         if pkgs.stdenv.buildPlatform == pkgs.stdenv.hostPlatform
-          then sops-install-secrets
-          else (pkgs.pkgsBuildHost.callPackage ../.. {}).sops-install-secrets;
+        then sops-install-secrets
+        else (pkgs.pkgsBuildHost.callPackage ../.. {}).sops-install-secrets;
       defaultText = lib.literalExpression "config.sops.package";
 
       description = ''
@@ -298,8 +305,8 @@ in {
   imports = [
     ./templates
     ./secrets-for-users
-    (lib.mkRenamedOptionModule [ "sops" "gnupgHome" ] [ "sops" "gnupg" "home" ])
-    (lib.mkRenamedOptionModule [ "sops" "sshKeyPaths" ] [ "sops" "gnupg" "sshKeyPaths" ])
+    (lib.mkRenamedOptionModule ["sops" "gnupgHome"] ["sops" "gnupg" "home"])
+    (lib.mkRenamedOptionModule ["sops" "sshKeyPaths"] ["sops" "gnupg" "sshKeyPaths"])
   ];
   #config = lib.mkMerge [
   #  (lib.mkIf (cfg.secrets != {}) {
@@ -322,48 +329,48 @@ in {
   #    );
 
   config = {
-      #sops.environment.SOPS_GPG_EXEC = lib.mkIf (cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != []) (lib.mkDefault "${pkgs.gnupg}/bin/gpg");
+    #sops.environment.SOPS_GPG_EXEC = lib.mkIf (cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != []) (lib.mkDefault "${pkgs.gnupg}/bin/gpg");
 
-      # When using sysusers we no longer be started as an activation script because those are started in initrd while sysusers is started later.
-      systemd.services.sops-install-secrets = {
-        #wantedBy = [  "sysinit.target" ];
-        wantedBy = [  "multi-user.target" ];
-        #after = [ "systemd-sysusers.service" ];
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-        environment = cfg.environment;
-        unitConfig.DefaultDependencies = "no";
+    # When using sysusers we no longer be started as an activation script because those are started in initrd while sysusers is started later.
+    systemd.services.sops-install-secrets = {
+      #wantedBy = [  "sysinit.target" ];
+      wantedBy = ["multi-user.target"];
+      #after = [ "systemd-sysusers.service" ];
+      after = ["network-online.target"];
+      wants = ["network-online.target"];
+      environment = cfg.environment;
+      unitConfig.DefaultDependencies = "no";
 
-        serviceConfig = {
-          Type = "oneshot";
-          ExecStart = [ "${cfg.package}/bin/sops-install-secrets ${manifest}" ];
-          RemainAfterExit = true;
-        };
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = ["${cfg.package}/bin/sops-install-secrets ${manifest}"];
+        RemainAfterExit = true;
       };
     };
+  };
 
-      #system.activationScripts = {
-      #  setupSecrets = lib.mkIf (regularSecrets != {} && !useSystemdActivation) (lib.stringAfter ([ "specialfs" "users" "groups" ] ++ lib.optional cfg.age.generateKey "generate-age-key") ''
-      #    [ -e /run/current-system ] || echo setting up secrets...
-      #    ${withEnvironment "${sops-install-secrets}/bin/sops-install-secrets ${manifest}"}
-      #  '' // lib.optionalAttrs (config.system ? dryActivationScript) {
-      #    supportsDryActivation = true;
-      #  });
+  #system.activationScripts = {
+  #  setupSecrets = lib.mkIf (regularSecrets != {} && !useSystemdActivation) (lib.stringAfter ([ "specialfs" "users" "groups" ] ++ lib.optional cfg.age.generateKey "generate-age-key") ''
+  #    [ -e /run/current-system ] || echo setting up secrets...
+  #    ${withEnvironment "${sops-install-secrets}/bin/sops-install-secrets ${manifest}"}
+  #  '' // lib.optionalAttrs (config.system ? dryActivationScript) {
+  #    supportsDryActivation = true;
+  #  });
 
-      #  generate-age-key = let
-      #    escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
-      #  in lib.mkIf cfg.age.generateKey (lib.stringAfter [] ''
-      #    if [[ ! -f ${escapedKeyFile} ]]; then
-      #      echo generating machine-specific age key...
-      #      mkdir -p $(dirname ${escapedKeyFile})
-      #      # age-keygen sets 0600 by default, no need to chmod.
-      #      ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
-      #    fi
-      #  '');
-      #};
-    #})
-    #{
-    # system.build.sops-nix-manifest = manifest;
-    #}
-  ];
+  #  generate-age-key = let
+  #    escapedKeyFile = lib.escapeShellArg cfg.age.keyFile;
+  #  in lib.mkIf cfg.age.generateKey (lib.stringAfter [] ''
+  #    if [[ ! -f ${escapedKeyFile} ]]; then
+  #      echo generating machine-specific age key...
+  #      mkdir -p $(dirname ${escapedKeyFile})
+  #      # age-keygen sets 0600 by default, no need to chmod.
+  #      ${pkgs.age}/bin/age-keygen -o ${escapedKeyFile}
+  #    fi
+  #  '');
+  #};
+  #})
+  #{
+  # system.build.sops-nix-manifest = manifest;
+  #}
+  #];
 }
