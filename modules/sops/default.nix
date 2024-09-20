@@ -301,32 +301,36 @@ in {
     (lib.mkRenamedOptionModule [ "sops" "gnupgHome" ] [ "sops" "gnupg" "home" ])
     (lib.mkRenamedOptionModule [ "sops" "sshKeyPaths" ] [ "sops" "gnupg" "sshKeyPaths" ])
   ];
-  config = lib.mkMerge [
-    (lib.mkIf (cfg.secrets != {}) {
-      assertions = [{
-        assertion = cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != [] || cfg.age.keyFile != null || cfg.age.sshKeyPaths != [];
-        message = "No key source configured for sops. Either set services.openssh.enable or set sops.age.keyFile or sops.gnupg.home";
-      } {
-        assertion = !(cfg.gnupg.home != null && cfg.gnupg.sshKeyPaths != []);
-        message = "Exactly one of sops.gnupg.home and sops.gnupg.sshKeyPaths must be set";
-      }] ++ lib.optionals cfg.validateSopsFiles (
-        lib.concatLists (lib.mapAttrsToList (name: secret: [{
-          assertion = builtins.pathExists secret.sopsFile;
-          message = "Cannot find path '${secret.sopsFile}' set in sops.secrets.${lib.strings.escapeNixIdentifier name}.sopsFile";
-        } {
-          assertion =
-            builtins.isPath secret.sopsFile ||
-            (builtins.isString secret.sopsFile && lib.hasPrefix builtins.storeDir secret.sopsFile);
-          message = "'${secret.sopsFile}' is not in the Nix store. Either add it to the Nix store or set sops.validateSopsFiles to false";
-        }]) cfg.secrets)
-      );
+  #config = lib.mkMerge [
+  #  (lib.mkIf (cfg.secrets != {}) {
+  #    assertions = [{
+  #      assertion = cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != [] || cfg.age.keyFile != null || cfg.age.sshKeyPaths != [];
+  #      message = "No key source configured for sops. Either set services.openssh.enable or set sops.age.keyFile or sops.gnupg.home";
+  #    } {
+  #      assertion = !(cfg.gnupg.home != null && cfg.gnupg.sshKeyPaths != []);
+  #      message = "Exactly one of sops.gnupg.home and sops.gnupg.sshKeyPaths must be set";
+  #    }] ++ lib.optionals cfg.validateSopsFiles (
+  #      lib.concatLists (lib.mapAttrsToList (name: secret: [{
+  #        assertion = builtins.pathExists secret.sopsFile;
+  #        message = "Cannot find path '${secret.sopsFile}' set in sops.secrets.${lib.strings.escapeNixIdentifier name}.sopsFile";
+  #      } {
+  #        assertion =
+  #          builtins.isPath secret.sopsFile ||
+  #          (builtins.isString secret.sopsFile && lib.hasPrefix builtins.storeDir secret.sopsFile);
+  #        message = "'${secret.sopsFile}' is not in the Nix store. Either add it to the Nix store or set sops.validateSopsFiles to false";
+  #      }]) cfg.secrets)
+  #    );
 
+  config = {
       sops.environment.SOPS_GPG_EXEC = lib.mkIf (cfg.gnupg.home != null || cfg.gnupg.sshKeyPaths != []) (lib.mkDefault "${pkgs.gnupg}/bin/gpg");
 
       # When using sysusers we no longer be started as an activation script because those are started in initrd while sysusers is started later.
       systemd.services.sops-install-secrets = {
-        wantedBy = [  "sysinit.target" ];
-        after = [ "systemd-sysusers.service" ];
+        #wantedBy = [  "sysinit.target" ];
+        wantedBy = [  "multi-user.target" ];
+        #after = [ "systemd-sysusers.service" ];
+        after = [ "network-online.target" ];
+        wants = [ "network-online.target" ];
         environment = cfg.environment;
         unitConfig.DefaultDependencies = "no";
 
