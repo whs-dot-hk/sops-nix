@@ -338,13 +338,13 @@ in {
       #after = [ "systemd-sysusers.service" ];
       after = ["network-online.target"];
       wants = ["network-online.target"];
-      environment = cfg.environment;
-      unitConfig.DefaultDependencies = "no";
+      #environment = cfg.environment;
+      #unitConfig.DefaultDependencies = "no";
 
       serviceConfig = {
-        Type = "oneshot";
+        #Type = "oneshot";
         ExecStart = ["${cfg.package}/bin/sops-install-secrets ${manifest}"];
-        RemainAfterExit = true;
+        #RemainAfterExit = true;
       };
     };
   };
